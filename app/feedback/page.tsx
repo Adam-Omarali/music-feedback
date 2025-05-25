@@ -20,6 +20,8 @@ export default function FeedbackPage() {
   const [leftSong, setLeftSong] = useState<Song | null>(null);
   const [rightSong, setRightSong] = useState<Song | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [previousPairs, setPreviousPairs] = useState<Set<string>>(new Set());
+  const [hasCompared, setHasCompared] = useState(false);
 
   const fetchComparisonPair = async () => {
     if (!artistId) {
@@ -35,6 +37,18 @@ export default function FeedbackPage() {
         throw new Error(data.error || "Failed to fetch songs");
       }
       const data = await response.json();
+
+      // Create a unique identifier for this pair
+      const pairId = [data.leftSong.id, data.rightSong.id].sort().join("-");
+
+      // If we've seen this pair before, fetch again
+      if (previousPairs.has(pairId)) {
+        return fetchComparisonPair();
+      }
+
+      // Add the new pair to our set
+      setPreviousPairs((prev) => new Set([...Array.from(prev), pairId]));
+
       setLeftSong(data.leftSong);
       setRightSong(data.rightSong);
     } catch (err) {
@@ -80,8 +94,7 @@ export default function FeedbackPage() {
         setRightSong({ ...rightSong, elo: updatedWinner.newRating });
       }
 
-      // Fetch new songs for comparison
-      await fetchComparisonPair();
+      setHasCompared(true);
     } catch (error) {
       console.error("Error updating ratings:", error);
     } finally {
@@ -101,6 +114,14 @@ export default function FeedbackPage() {
     return (
       <div className="flex justify-center items-center h-screen text-red-500">
         {error}
+      </div>
+    );
+  }
+
+  if (hasCompared) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Thank you for your feedback!
       </div>
     );
   }
