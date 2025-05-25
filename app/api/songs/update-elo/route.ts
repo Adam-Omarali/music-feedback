@@ -71,6 +71,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to update ratings' }, { status: 500 });
     }
 
+    // Insert comparison record
+    const { error: comparisonError } = await supabase
+      .from('comparisons')
+      .insert({
+        song_a_id: loserId,
+        song_b_id: winnerId,
+        winner: winnerId
+      });
+
+    if (comparisonError) {
+      console.error('Failed to insert comparison:', comparisonError);
+      return NextResponse.json({ error: 'Failed to record comparison' }, { status: 500 });
+    }
+
     return NextResponse.json({
       winner: { id: winnerId, newRating: newWinnerRating },
       loser: { id: loserId, newRating: newLoserRating }
