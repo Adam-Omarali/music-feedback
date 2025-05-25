@@ -53,12 +53,21 @@ export async function POST(request: Request) {
     // Update ratings in database
     const { error: updateError } = await supabase
       .from('songs')
-      .upsert([
-        { id: winnerId, elo: newWinnerRating },
-        { id: loserId, elo: newLoserRating }
-      ]);
+      .update({ elo: newWinnerRating })
+      .eq('id', winnerId);
 
     if (updateError) {
+      console.error('Failed to update winner rating:', updateError);
+      return NextResponse.json({ error: 'Failed to update ratings' }, { status: 500 });
+    }
+
+    const { error: loserUpdateError } = await supabase
+      .from('songs')
+      .update({ elo: newLoserRating })
+      .eq('id', loserId);
+
+    if (loserUpdateError) {
+      console.error('Failed to update loser rating:', loserUpdateError);
       return NextResponse.json({ error: 'Failed to update ratings' }, { status: 500 });
     }
 
