@@ -1,51 +1,57 @@
-import { signUpAction } from "@/app/actions";
-import { FormMessage, Message } from "@/components/form-message";
-import { SubmitButton } from "@/components/submit-button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from "next/link";
-import { SmtpMessage } from "../smtp-message";
+import { createClient } from "@/utils/supabase/server";
+import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { headers } from "next/headers";
 
-export default async function Signup(props: {
-  searchParams: Promise<Message>;
-}) {
-  const searchParams = await props.searchParams;
-  if ("message" in searchParams) {
-    return (
-      <div className="w-full flex-1 flex items-center h-screen sm:max-w-md justify-center gap-2 p-4">
-        <FormMessage message={searchParams} />
-      </div>
-    );
+export default async function SignUp() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    return redirect("/protected");
   }
 
+  const signInWithGoogle = async () => {
+    "use server";
+    const supabase = await createClient();
+    const headersList = await headers();
+    const origin = headersList.get("origin") || "http://localhost:3000";
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+      },
+    });
+
+    if (error) {
+      return redirect("/sign-up?error=Could not authenticate user");
+    }
+
+    return redirect(data.url);
+  };
+
   return (
-    <>
-      <form className="flex flex-col min-w-64 max-w-64 mx-auto">
-        <h1 className="text-2xl font-medium">Sign up</h1>
-        <p className="text-sm text text-foreground">
-          Already have an account?{" "}
-          <Link className="text-primary font-medium underline" href="/sign-in">
-            Sign in
-          </Link>
-        </p>
-        <div className="flex flex-col gap-2 [&>input]:mb-3 mt-8">
-          <Label htmlFor="email">Email</Label>
-          <Input name="email" placeholder="you@example.com" required />
-          <Label htmlFor="password">Password</Label>
-          <Input
-            type="password"
-            name="password"
-            placeholder="Your password"
-            minLength={6}
-            required
-          />
-          <SubmitButton formAction={signUpAction} pendingText="Signing up...">
-            Sign up
-          </SubmitButton>
-          <FormMessage message={searchParams} />
+    <div className="flex-1 flex flex-col w-full px-8 sm:max-w-md justify-center gap-2">
+      <div className="animate-in flex-1 flex flex-col w-full justify-center gap-6 text-foreground">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <h1 className="text-2xl font-bold">Welcome</h1>
+          <p className="text-sm text-muted-foreground">
+            Sign up with your Google account to get started
+          </p>
         </div>
-      </form>
-      <SmtpMessage />
-    </>
+
+        <form className="animate-in flex-1 flex flex-col w-full justify-center gap-6 text-foreground">
+          <Button
+            formAction={signInWithGoogle}
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
+          >
+            Sign up with Google
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }

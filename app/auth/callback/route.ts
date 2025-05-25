@@ -12,13 +12,33 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    
+    if (error) {
+      console.error('Auth error:', error);
+      return NextResponse.redirect(`${origin}/sign-in?error=Could not authenticate user`);
+    }
+
+    // Check if user exists in the users table
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+
+      if (!existingUser) {
+        // New user, redirect to onboarding
+        return NextResponse.redirect(`${origin}/onboarding`);
+      }
+    }
   }
 
   if (redirectTo) {
     return NextResponse.redirect(`${origin}${redirectTo}`);
   }
 
-  // URL to redirect to after sign up process completes
+  // Existing user or no code, redirect to protected page
   return NextResponse.redirect(`${origin}/protected`);
 }
