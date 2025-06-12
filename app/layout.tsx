@@ -64,6 +64,7 @@ export default async function RootLayout({
                         Feedback
                       </Link>
                     )}
+                    <Link href="/create-feedback">Create Feedback</Link>
                   </div>
                 </div>
                 <HeaderAuth />

@@ -21,7 +21,7 @@ function calculateNewRatings(winnerRating: number, loserRating: number) {
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
-    const { winnerId, loserId } = await request.json();
+    const { winnerId, loserId, feedback_form } = await request.json();
 
     // Get current ratings
     const { data: songs, error: fetchError } = await supabase
@@ -77,7 +77,8 @@ export async function POST(request: Request) {
       .insert({
         song_a_id: loserId,
         song_b_id: winnerId,
-        winner: winnerId
+        winner: winnerId,
+        feedback_form: feedback_form || null
       });
 
     if (comparisonError) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { AudioPlayer } from "@/components/AudioPlayer";
 
 interface Song {
@@ -12,64 +12,81 @@ interface Song {
   elo?: number;
 }
 
-export default function FeedbackPage() {
-  const searchParams = useSearchParams();
-  const artistId = searchParams.get("artistId");
+interface FeedbackForm {
+  id: string;
+  name: string;
+  song_pairs: [string, string][];
+}
+
+export default function FeedbackFormPage() {
+  const params = useParams();
+  const formId = params.id as string;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leftSong, setLeftSong] = useState<Song | null>(null);
   const [rightSong, setRightSong] = useState<Song | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [previousPairs, setPreviousPairs] = useState<Set<string>>(new Set());
+  const [currentPairIndex, setCurrentPairIndex] = useState(0);
+  const [feedbackForm, setFeedbackForm] = useState<FeedbackForm | null>(null);
   const [hasCompared, setHasCompared] = useState(false);
 
-  const fetchComparisonPair = async () => {
-    if (!artistId) {
-      setError("Artist ID is required");
-      setLoading(false);
-      return;
-    }
+  useEffect(() => {
+    fetchFeedbackForm();
+  }, [formId]);
 
+  const fetchFeedbackForm = async () => {
     try {
-      const response = await fetch(`/api/songs/compare?artistId=${artistId}`);
+      const response = await fetch(`/api/feedback/${formId}`);
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || "Failed to fetch songs");
+        throw new Error(data.error || "Failed to fetch feedback form");
       }
+
       const data = await response.json();
-
-      // Create a unique identifier for this pair
-      const pairId = [data.leftSong.id, data.rightSong.id].sort().join("-");
-
-      // If we've seen this pair before, fetch again
-      if (previousPairs.has(pairId)) {
-        return fetchComparisonPair();
-      }
-
-      // Add the new pair to our set
-      setPreviousPairs((prev) => new Set([...Array.from(prev), pairId]));
-
-      setLeftSong(data.leftSong);
-      setRightSong(data.rightSong);
+      setFeedbackForm(data.form);
+      setLeftSong(data.currentPair.leftSong);
+      setRightSong(data.currentPair.rightSong);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load songs");
+      setError(
+        err instanceof Error ? err.message : "Failed to load feedback form"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchComparisonPair();
-  }, [artistId]);
+  const fetchNextPair = async () => {
+    try {
+      const response = await fetch(
+        `/api/feedback/${formId}/next-pair?index=${currentPairIndex + 1}`
+      );
+      if (!response.ok) {
+        const data = await response.json();
+        if (response.status === 404) {
+          setHasCompared(true);
+          return;
+        }
+        throw new Error(data.error || "Failed to fetch next pair");
+      }
+
+      const data = await response.json();
+      setLeftSong(data.leftSong);
+      setRightSong(data.rightSong);
+      setCurrentPairIndex((prev) => prev + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load next pair");
+    }
+  };
 
   const handlePick = async (winner: "left" | "right") => {
-    if (!leftSong || !rightSong) return;
+    if (!leftSong || !rightSong || !feedbackForm) return;
 
     setIsLoading(true);
     try {
       const winnerId = winner === "left" ? leftSong.id : rightSong.id;
       const loserId = winner === "left" ? rightSong.id : leftSong.id;
 
+      // Store the comparison
       const response = await fetch("/api/songs/update-elo", {
         method: "POST",
         headers: {
@@ -78,7 +95,7 @@ export default function FeedbackPage() {
         body: JSON.stringify({
           winnerId,
           loserId,
-          feedback_form: null,
+          feedback_form: formId,
         }),
       });
 
@@ -98,7 +115,8 @@ export default function FeedbackPage() {
         setRightSong({ ...rightSong, elo: updatedWinner.newRating });
       }
 
-      setHasCompared(true);
+      // Move to the next pair
+      await fetchNextPair();
     } catch (error) {
       console.error("Error updating ratings:", error);
     } finally {
